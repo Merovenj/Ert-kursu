@@ -45,3 +45,20 @@ async def main_worker_loop():
 
 if __name__ == "__main__":
     asyncio.run(main_worker_loop())
+print("=== User Input Choice Example ===\n")
+
+# *This part is for experimental purposes only*
+
+# choice = input('Choose an option:\n1. Option A (Take one)\n2. Option B (Take other)\nEnter 1 or 2: ').strip()
+
+# if choice == "1":
+    # Option A: Take one as "YES"
+    number = float(input("Enter a number: "))
+    result = number ** 2
+    print(f"Square of {number} is {result}")
+# else:
+    # Option B: Take other as "NO"
+    number = float(input("Enter a number: "))
+    result = number ** 3
+    print(f"Cube of {number} is {result}")
+

@@ -1,0 +1,87 @@
+<html>
+<head>
+<title>kursu-2.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cf8e6d;}
+.s1 { color: #bcbec4;}
+.s2 { color: #bcbec4;}
+.s3 { color: #7a7e85;}
+.s4 { color: #2aacb8;}
+.s5 { color: #5f826b; font-style: italic;}
+.s6 { color: #6aab73;}
+</style>
+</head>
+<body bgcolor="#191a1c">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+kursu-2.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">asyncio</span>
+<span class="s0">import </span><span class="s1">json</span>
+<span class="s0">import </span><span class="s1">redis</span><span class="s2">.</span><span class="s1">asyncio </span><span class="s0">as </span><span class="s1">aioredis</span>
+
+<span class="s3"># Hard limits to protect your Relational Database Management System (RDBMS)</span>
+<span class="s1">MAX_CONCURRENT_DB_WRITES </span><span class="s2">= </span><span class="s4">50</span>
+<span class="s1">db_semaphore </span><span class="s2">= </span><span class="s1">asyncio</span><span class="s2">.</span><span class="s1">Semaphore</span><span class="s2">(</span><span class="s1">MAX_CONCURRENT_DB_WRITES</span><span class="s2">)</span>
+
+
+<span class="s0">async def </span><span class="s1">process_single_vote</span><span class="s2">(</span><span class="s1">raw_vote_data</span><span class="s2">: </span><span class="s1">str</span><span class="s2">):</span>
+    <span class="s5">&quot;&quot;&quot;Worker task that actually commits data to the persistent DB.&quot;&quot;&quot;</span>
+    <span class="s0">async with </span><span class="s1">db_semaphore</span><span class="s2">:</span>
+        <span class="s1">vote </span><span class="s2">= </span><span class="s1">json</span><span class="s2">.</span><span class="s1">loads</span><span class="s2">(</span><span class="s1">raw_vote_data</span><span class="s2">)</span>
+
+        <span class="s0">try</span><span class="s2">:</span>
+            <span class="s3"># --- Simulated Database Transaction Block ---</span>
+            <span class="s3"># In production, use your DB pool here (e.g., asyncpg for PostgreSQL)</span>
+            <span class="s3"># await db_pool.execute(</span>
+            <span class="s3">#     &quot;INSERT INTO votes (voter_id, candidate_id) VALUES ($1, $2)&quot;,</span>
+            <span class="s3">#     vote['voter_id'], vote['candidate_id']</span>
+            <span class="s3"># )</span>
+
+            <span class="s0">await </span><span class="s1">asyncio</span><span class="s2">.</span><span class="s1">sleep</span><span class="s2">(</span><span class="s4">0.02</span><span class="s2">)  </span><span class="s3"># Simulate optimized DB write (20ms)</span>
+            <span class="s1">print</span><span class="s2">(</span><span class="s6">f&quot;🔒 [DB Success] Vote committed for voter: </span><span class="s0">{</span><span class="s1">vote</span><span class="s2">[</span><span class="s6">'voter_id'</span><span class="s2">]</span><span class="s0">}</span><span class="s6">&quot;</span><span class="s2">)</span>
+
+        <span class="s0">except </span><span class="s1">Exception </span><span class="s0">as </span><span class="s1">e</span><span class="s2">:</span>
+            <span class="s3"># If DB write fails (e.g. deadlock), push to a Dead Letter Queue (DLQ)</span>
+            <span class="s1">print</span><span class="s2">(</span><span class="s6">f&quot;❌ [DB Failure] Redirecting to retry queue: </span><span class="s0">{</span><span class="s1">e</span><span class="s0">}</span><span class="s6">&quot;</span><span class="s2">)</span>
+
+
+<span class="s0">async def </span><span class="s1">main_worker_loop</span><span class="s2">():</span>
+    <span class="s1">r_client </span><span class="s2">= </span><span class="s1">aioredis</span><span class="s2">.</span><span class="s1">Redis</span><span class="s2">(</span><span class="s1">host</span><span class="s2">=</span><span class="s6">'localhost'</span><span class="s2">, </span><span class="s1">port</span><span class="s2">=</span><span class="s4">6379</span><span class="s2">, </span><span class="s1">db</span><span class="s2">=</span><span class="s4">0</span><span class="s2">)</span>
+    <span class="s1">print</span><span class="s2">(</span><span class="s6">&quot;🚀 Voting background worker initialized. Awaiting queue items...&quot;</span><span class="s2">)</span>
+
+    <span class="s0">while True</span><span class="s2">:</span>
+        <span class="s3"># 1. Fetch data from Redis queue. BLPOP blocks until an item is available.</span>
+        <span class="s3"># It pops 1 item out atomically, ensuring no two workers process the same vote.</span>
+        <span class="s1">queue_name</span><span class="s2">, </span><span class="s1">raw_vote </span><span class="s2">= </span><span class="s0">await </span><span class="s1">r_client</span><span class="s2">.</span><span class="s1">blpop</span><span class="s2">(</span><span class="s6">&quot;voting_queue&quot;</span><span class="s2">)</span>
+
+        <span class="s0">if </span><span class="s1">raw_vote</span><span class="s2">:</span>
+            <span class="s3"># 2. Schedule the DB task asynchronously.</span>
+            <span class="s3"># The loop keeps pulling from Redis instantly without waiting for the DB write to finish.</span>
+            <span class="s1">asyncio</span><span class="s2">.</span><span class="s1">create_task</span><span class="s2">(</span><span class="s1">process_single_vote</span><span class="s2">(</span><span class="s1">raw_vote</span><span class="s2">.</span><span class="s1">decode</span><span class="s2">(</span><span class="s6">'utf-8'</span><span class="s2">)))</span>
+
+
+<span class="s0">if </span><span class="s1">__name__ </span><span class="s2">== </span><span class="s6">&quot;__main__&quot;</span><span class="s2">:</span>
+    <span class="s1">asyncio</span><span class="s2">.</span><span class="s1">run</span><span class="s2">(</span><span class="s1">main_worker_loop</span><span class="s2">())</span>
+<span class="s1">print</span><span class="s2">(</span><span class="s6">&quot;=== User Input Choice Example ===</span><span class="s0">\n</span><span class="s6">&quot;</span><span class="s2">)</span>
+
+<span class="s3"># *This part is for experimental purposes only*</span>
+
+<span class="s3"># choice = input('Choose an option:\n1. Option A (Take one)\n2. Option B (Take other)\nEnter 1 or 2: ').strip()</span>
+
+<span class="s3"># if choice == &quot;1&quot;:</span>
+    <span class="s3"># Option A: Take one as &quot;YES&quot;</span>
+    <span class="s1">number </span><span class="s2">= </span><span class="s1">float</span><span class="s2">(</span><span class="s1">input</span><span class="s2">(</span><span class="s6">&quot;Enter a number: &quot;</span><span class="s2">))</span>
+    <span class="s1">result </span><span class="s2">= </span><span class="s1">number </span><span class="s2">** </span><span class="s4">2</span>
+    <span class="s1">print</span><span class="s2">(</span><span class="s6">f&quot;Square of </span><span class="s0">{</span><span class="s1">number</span><span class="s0">} </span><span class="s6">is </span><span class="s0">{</span><span class="s1">result</span><span class="s0">}</span><span class="s6">&quot;</span><span class="s2">)</span>
+<span class="s3"># else:</span>
+    <span class="s3"># Option B: Take other as &quot;NO&quot;</span>
+    <span class="s1">number </span><span class="s2">= </span><span class="s1">float</span><span class="s2">(</span><span class="s1">input</span><span class="s2">(</span><span class="s6">&quot;Enter a number: &quot;</span><span class="s2">))</span>
+    <span class="s1">result </span><span class="s2">= </span><span class="s1">number </span><span class="s2">** </span><span class="s4">3</span>
+    <span class="s1">print</span><span class="s2">(</span><span class="s6">f&quot;Cube of </span><span class="s0">{</span><span class="s1">number</span><span class="s0">} </span><span class="s6">is </span><span class="s0">{</span><span class="s1">result</span><span class="s0">}</span><span class="s6">&quot;</span><span class="s2">)</span>
+
+</pre>
+</body>
+</html>
